@@ -8,6 +8,7 @@ project(wave
 
 add_executable(wave
     src/main.cpp
+    src/csv_printer.cpp
 )
 
 target_compile_features(wave PRIVATE cxx_std_14) # probably C++11 would be enough

@@ -1,5 +1,10 @@
 #include <iostream>
 #include <string>
+#include <cmath>
+#include <functional>
+
+// #define NDEBUG
+#include <cassert>
 
 #include "commons.hpp"
 #include "csv_printer.hpp"
@@ -10,6 +15,9 @@ using std::endl;
 using std::vector;
 using std::string;
 
+using fOfx = std::function<double(double)>; // f(x)
+using norm = std::function<double(list)>;   // norm of list. Could be max, euklidean or other 
+
 // keep ghost points at the end initialized to zero
 list first_deriv_2nd_order(list v, double h)
 {
@@ -18,7 +26,7 @@ list first_deriv_2nd_order(list v, double h)
     list deriv(v.size(), 0.0);
 
     for(ind i = num_of_ghosts; i < v.size() - num_of_ghosts; ++i) {
-        deriv[i] = (deriv[i+1] - deriv[i-1]) / (2. * h);
+        deriv[i] = (v[i+1] - v[i-1]) / (2. * h);
     }
 
     return deriv;
@@ -31,7 +39,7 @@ list second_deriv_2n_order(list v, double h)
     list deriv(v.size(), 0.0);
 
     for (ind i = num_of_ghosts; i < v.size() - num_of_ghosts; ++i) {
-        deriv[i] = (deriv[i+1] - 2. * deriv[i] + deriv[i-1]) / (h*h);
+        deriv[i] = (v[i+1] - 2. * v[i] + v[i-1]) / (h*h);
     }
 
     return deriv;
@@ -54,7 +62,8 @@ list linspace(double start, double stop, ind N)
 
 list arange(double start, double stop, double step)
 {
-    ind N = static_cast<ind>( (stop - start) / step ); // same as floor
+    ind N = static_cast<ind>( (stop - start) / step + 1); // same as floor
+                                                          // +1, s.t it produces same result as np.arange()
 
     list vals(N, 0);
     vals[0] = start;
@@ -65,14 +74,24 @@ list arange(double start, double stop, double step)
     return vals;
 }
 
-void fill_list_with_vals(list &y, const list &x)
+void fill_list_with_vals(list &y, const list &x, fOfx func)
 {
+    if (y.size() != x.size()) {
+        throw std::runtime_error("y and x need to be same size!");
+    }
 
+    for (ind i = 0; i < y.size(); ++i) {
+        y[i] = func(x[i]);
+    }
 }
 
-list create_list_with_vals(const list &x)
+list create_list_with_vals(const list &x, fOfx func)
 {
-    
+    list y(x.size(), 0.0);
+
+    fill_list_with_vals(y, x, func);
+
+    return y;
 }
 
 void cout_list(const list& l)
@@ -86,17 +105,41 @@ void cout_list(const list& l)
 
 int main()
 {
-    constexpr ind N = 60;
-    constexpr double h = 0.1;
+    ////////////////////////////////////////////
+    // init
+    const ind N = 100;
+    const double start = 0;
+    const double stop = 1;
 
-    list x = arange(0, 0.65, 0.1); // TODO: fix arange
-    list y = {1, 2, 3};
+    // d/dx sin⁴(12*pi*x) = 4*sin³(12*pi*x)*cos(12*pi*x)*12*pi = 48*pi*sin³(12pi*x)*cos(12pi*x)
+    // d/dx 48*pi*sin³(12*pi*x)*cos(12pi*x) = 48*pi*[ 3*sin²(12pi*x)*cos²(12*pi*x)*12pi - sin³(12pi*x)*sin(12pi*x)*12*pi ]
+    //                                  = 576*pi²*sin²(12pi*x)[ 3*cos²(12pi*x) - sin²(12pi*x) ]
+    fOfx sin_4 = [](double x) { return std::pow(std::sin(12*M_PI*x), 4); };
+    fOfx sin_4_first_d = [](double x) { 
+        return 48*M_PI*std::pow(std::sin(12*M_PI*x), 3) * std::cos(12*M_PI*x); 
+    };
+    fOfx sin_4_second_d = [](double x) {
+        return 576*M_PI*M_PI*std::pow(std::sin(12*M_PI*x), 2)*( 3*std::pow(std::cos(12*M_PI*x), 2) - std::pow(std::sin(12*M_PI*x), 2) );
+    };
+
+    list x = linspace(start, stop, N);
+    const double step = x[1] - x[0]; // assume we have at least 2 values
+    list y = create_list_with_vals(x, sin_4);
 
     CSVPrinter printer("out/", "csv");
 
-    cout_list(x);
+    ////////////////////////////////////////////
+    // logic
+    auto first_deriv_n = first_deriv_2nd_order(y, step);
+    auto second_deriv_n = second_deriv_2n_order(y, step);
+    auto first_deriv_a = create_list_with_vals(x, sin_4_first_d);
+    auto second_deriv_a = create_list_with_vals(x, sin_4_second_d);
 
-    // printer.print(x, y, "test");
+    printer.print(x, y, "foo");
+    printer.print(x, first_deriv_n, "foo_d_n", 1);
+    printer.print(x, first_deriv_a, "foo_d_a", 1);
+    printer.print(x, second_deriv_n, "foo_dd_n", 1);
+    printer.print(x, second_deriv_a, "foo_dd_a", 1);
 
-    cout << "Hello Worlds!" << endl;
+    cout << M_PI << endl;
 }

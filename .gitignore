@@ -32,5 +32,5 @@
 *.app
 
 # we don't want to save output
-.csv
-.pdf
+*.csv
+*.pdf

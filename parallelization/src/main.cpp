@@ -2,6 +2,8 @@
 #include <string>
 #include <cmath>
 #include <functional>
+#include <algorithm>
+#include <numeric>
 
 // #define NDEBUG
 #include <cassert>
@@ -94,7 +96,81 @@ list create_list_with_vals(const list &x, fOfx func)
     return y;
 }
 
-void cout_list(const list& l)
+// convergence test with analytical f(x) and numerical f^h(x) with stepsize h
+// |f(x) - f^h(x)| / |f(x) - f^{h/2}(x)|
+// we assume vector of numerical solutions to follow correct pattern for step size
+// analytical.size() == numerical[0].size()
+// numerical[1].size() == 2*numerical[0].size() 
+// etc..
+// thus numerical[0][:] == numerical[1][:2:] e.g., i.e. we assume numerical[i][0] == numerical[j][0] for all i,j
+// though we ignore the gost cells, thus it should read numerical[0][n_ghost+1:n_ghost] = numerical[1][n_ghost+1:2:n_ghost]
+std::vector<double> convergence_test(norm norm_f, list analytical, std::vector<list> numerical, ind num_of_ghost=0)
+{
+    std::vector<double> conv_orders;
+
+    for (ind num = 0; num < numerical.size() - 1; ++num) {
+        list temp(analytical.size(), 0.0);
+        // calculate |f(x) - f^h(x)| / |f(x) - f^{h/2}(x)|
+        for (ind i = num_of_ghost; i < analytical.size() - num_of_ghost; ++i) {
+            ind ind_h = std::pow(2, num)*i;
+            ind ind_h_half = ind_h*2;
+            temp[i] = std::fabs( (analytical[i] - numerical[num][ind_h]) 
+                    / (analytical[i] - numerical[num+1][ind_h_half]) );
+        }
+
+        // calculate convergence order
+        conv_orders.push_back( std::sqrt(norm_f(temp)) ); // ghost cells should be fine, since they are zero
+    }
+
+    return conv_orders;
+}
+
+// similar comments to above
+std::vector<double> self_convergence_test(norm norm_f, std::vector<list> numerical, ind num_of_ghost=0)
+{
+    std::vector<double> conv_orders;
+
+    for (ind num = 0; num < numerical.size() - 2; ++num) {
+        list temp(numerical[num].size(), 0.0);
+        // calculate |f^h(x) - f^h/2(x)| / |f^h/2(x) - f^{h/4}(x)|
+        for (ind i = num_of_ghost; i < numerical[num].size() - num_of_ghost; ++i) {
+            ind ind_h_half = 2*i;
+            ind ind_h_quart = 4*i;
+            temp[i] = std::fabs( (numerical[num][i] - numerical[num+1][ind_h_half]) 
+                    / (numerical[num+1][ind_h_half] - numerical[num+2][ind_h_quart]) );
+        }
+        // calculate convergence order
+        conv_orders.push_back( std::sqrt(norm_f(temp)) ); // ghost cells should be fine, since they are zero
+    }
+
+    return conv_orders;
+}
+
+double norm_max(list l)
+{
+    return *std::max_element(l.begin(), l.end());
+}
+
+// euklicdean norm
+double norm_eukl(list l)
+{
+    double res = 0.0;
+
+    for (auto it = l.begin(); it != l.end(); ++it) {
+        res += (*it) * (*it);
+    }
+
+    return std::sqrt(res);
+}
+
+template<class T>
+T mean(std::vector<T> v)
+{
+    return std::accumulate(v.begin(), v.end(), 0.0) / v.size();
+}
+
+template<class T>
+void cout_vec(const std::vector<T>& l)
 {
     std::cout << "[";
     for (const auto &i : l) {
@@ -129,7 +205,7 @@ int main()
     CSVPrinter printer("out/", "csv");
 
     ////////////////////////////////////////////
-    // logic
+    // test derivatives
     auto first_deriv_n = first_deriv_2nd_order(y, step);
     auto second_deriv_n = second_deriv_2n_order(y, step);
     auto first_deriv_a = create_list_with_vals(x, sin_4_first_d);
@@ -141,5 +217,37 @@ int main()
     printer.print(x, second_deriv_n, "foo_dd_n", 1);
     printer.print(x, second_deriv_a, "foo_dd_a", 1);
 
-    cout << M_PI << endl;
+    ////////////////////////////////////////////
+    // test convergence
+    std::vector<list> numericals;
+    std::vector<list> x_vals;
+    std::vector<double> step_sizes{0.2};
+    const unsigned step_size_num = 10;
+    for (unsigned i = 1; i <= step_size_num; ++i) {
+        step_sizes.push_back(step_sizes[i-1]*0.5);
+    }
+    list analytical = create_list_with_vals(arange(start, stop, step_sizes[0]), sin_4_first_d);
+
+    for (const auto &s : step_sizes) {
+        list x = arange(start, stop, s); // use local
+        x_vals.push_back(x);
+        list y = create_list_with_vals(x, sin_4); // could be done more efficiently by computing it once with smallest stepsize.. eh..
+
+        numericals.push_back(first_deriv_2nd_order(y, s));
+
+        // cout_vec<double>(x);
+    }
+
+    auto conv_max = convergence_test(norm_max, analytical, numericals, 1);
+    auto conv_eukl = convergence_test(norm_eukl, analytical, numericals, 1);
+
+    cout << "convergence: " << endl;
+    std::cout << "max: " << mean<double>(conv_max) << ".... euklidean: " << mean<double>(conv_eukl) << std::endl;
+
+    auto sconv_max = self_convergence_test(norm_max, numericals, 1);
+    auto sconv_eukl = self_convergence_test(norm_eukl, numericals, 1);
+
+    cout << "self convergence: " << endl;
+    std::cout << "max: " << mean<double>(sconv_max) << ".... euklidean: " << mean<double>(sconv_eukl) << std::endl; // giving kinda weird results
+    // TODO: fix
 }

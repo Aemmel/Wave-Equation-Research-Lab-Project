@@ -2,8 +2,8 @@
 
 #include <vector>
 // #include <functional>
-#include "Eigen/Dense"
+#include "matrix3.hpp"
 
 using list = std::vector<double>;
-using mat = Eigen::MatrixXd;
+using matrix = matrix3<double>;
 using ind = std::vector<double>::size_type;

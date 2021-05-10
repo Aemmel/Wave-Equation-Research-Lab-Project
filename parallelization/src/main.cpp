@@ -19,10 +19,11 @@ using std::vector;
 using std::string;
 
 using fOfx = std::function<double(double)>; // f(x)
+using fOfxyz = std::function<double(double,double,double)>; //f(x, y, z)
 using norm = std::function<double(list)>;   // norm of list. Could be max, euklidean or other 
 
 // keep ghost points at the end initialized to zero
-list first_deriv_2nd_order(list v, double h)
+list first_deriv_2nd_order(const list &v, double h)
 {
     const unsigned num_of_ghosts = 1;
 
@@ -35,7 +36,7 @@ list first_deriv_2nd_order(list v, double h)
     return deriv;
 }
 
-list second_deriv_2n_order(list v, double h)
+list second_deriv_2n_order(const list& v, double h)
 {
     const unsigned num_of_ghosts = 1;
 
@@ -95,6 +96,90 @@ list create_list_with_vals(const list &x, fOfx func)
     fill_list_with_vals(y, x, func);
 
     return y;
+}
+
+void fill_matrix_with_vals(matrix &m, const list &x, const list &y, const list& z, fOfxyz func)
+{
+    auto shape = m.get_shape();
+    if (shape[0] != x.size() && shape[1] != y.size() && shape[2] != z.size()) {
+        throw std::runtime_error("mat and x,y,z need to fit!");
+    }
+
+    for (ind i = 0; i < shape[0]; ++i) {
+        for (ind j = 0; j < shape[1]; ++j) {
+            for (ind k = 0; k < shape[2]; ++k) {
+                m(i,j,k) = func(x[i], y[j], z[k]);
+            }
+        }
+    }
+}
+
+matrix create_matrix_with_vals(const list &x, const list &y, const list &z, fOfxyz func)
+{
+    matrix m(x.size(), y.size(), z.size());
+
+    fill_matrix_with_vals(m, x, y, z, func);
+
+    return m;
+}
+
+// first mixed derivative
+// f_xy, f_yx, f_zx, ... are ok
+// f_xx is not
+// gives f_(c1)(c2) (c1 = coordinate 1)
+matrix first_mixed_deriv_2nd_order(const matrix& u, unsigned short c1, unsigned short c2, double h1, double h2)
+{
+    if (c1 == c2) {
+        throw std::runtime_error("Only fist order! c1 != c2");
+    }
+    if (c1 < 1 || c1 > 3 || c1 < 1 || c2 > 3) {
+        throw std::runtime_error("Only coordinate 1,2,3 allowed!");
+    }
+
+    // assuming that c1 < c2 makes the logic easier
+    // after rule of schwartz f_(c1)(c2) == f_(c2)(c1)
+    if (c1 > c2) {
+        std::swap(c1, c2);
+    }
+
+    auto shape = u.get_shape();
+    unsigned is_x = c1 == 1 || c2 == 1 ? 1 : 0;
+    unsigned is_y = c1 == 2 || c2 == 2 ? 1 : 0;
+    unsigned is_z = c1 == 3 || c2 == 3 ? 1 : 0;
+
+    matrix deriv(shape);
+
+    using index = std::array<ind, 3>;
+
+    // we have (e.g.)
+    // d/dxdy u(x,y) = u_i+1,j+1  term_1
+    //               - u_i+1,j-1  term_2
+    //               - u_j-1,i+1  term_3
+    //               + u_i-1,j-1  term_4
+
+    double denom = 4.0*h1*h2; // denominator
+
+    for (ind i = is_x; i < shape[0] - is_x; ++i) {
+        for (ind j = is_y; j < shape[1] - is_y; ++j) {
+            for (ind k = is_z; k < shape[2] - is_z; ++k) {
+                // these can be worked out when writing different combinations under each other
+                // there probably is a nicer way to do this, but at least this will be quite fast
+                index i_term_1{ i + 1*is_x, j + 1*is_y, k + 1*is_z };
+                index i_term_2{ i + 1*is_x, j - 1*is_x*is_y + 1*is_y*is_z, k - 1*is_z };
+                index i_term_3{ i - 1*is_x, j + 1*is_x*is_y - 1*is_y*is_z, k + 1*is_z };
+                index i_term_4{ i - 1*is_x, j - 1*is_y, k - 1*is_z };
+
+                deriv(i,j,k) = (
+                      u(i_term_1[0], i_term_1[1], i_term_1[2]) // term 1
+                    - u(i_term_2[0], i_term_2[1], i_term_2[2]) // term 2
+                    - u(i_term_3[0], i_term_3[1], i_term_3[2]) // term 3
+                    + u(i_term_4[0], i_term_4[1], i_term_4[2]) // term 4
+                ) / denom ;
+            }
+        }
+    }
+
+    return deriv;
 }
 
 // convergence test with analytical f(x) and numerical f^h(x) with stepsize h
@@ -267,15 +352,40 @@ void QB()
     CSVPrinter printer("out/", "csv");
 }
 
+
+
 int main()
 {
-    matrix3<double> mat(4,3,2);
+    matrix m1(3,3,3);
+    matrix m2(3,3,3);
 
-    for (auto i : mat.m_mat) {
-        cout << i << endl;
-    }
+    m1(1,1,1) = 5;
+    m2(2,2,2) = 3;
+    m1(2,2,2) = 1;
 
-    cout << mat << endl;
+    cout << m2 - m1 << endl;
+
+    return 0;
+
+    fOfxyz foo = [](double x, double y, double z) { return 2*x*y + y*y*z; };
+    fOfxyz foo_xy = [](double x, double y, double z) { return 2; };
+    fOfxyz foo_yz = [](double x, double y, double z) { return 2*y; };
+
+    auto x = linspace(0, 5, 100);
+    double hx = x[1] - x[0];
+    auto y = linspace(0, 5, 100);
+    double hy = y[1] - y[0];
+    auto z = linspace(0, 5, 100);
+    double hz = z[1] - z[0];
+
+    matrix mat = create_matrix_with_vals(x, y, z, foo);
+    matrix mat_xy_a = create_matrix_with_vals(x, y, z, foo_xy);
+    matrix mat_xy_n = first_mixed_deriv_2nd_order(mat, 1, 2, hx, hy);
+    matrix mat_yz_a = create_matrix_with_vals(x, y, z, foo_yz);
+    matrix mat_yz_n = first_mixed_deriv_2nd_order(mat, 2, 3, hy, hz);
+
+    cout << norm_max((mat_xy_a - mat_xy_n).m_mat) << endl; // TODO: fix
+    cout << norm_max((mat_yz_a - mat_yz_n).m_mat) << endl;
 
     return 0;
 }

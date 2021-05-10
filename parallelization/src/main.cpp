@@ -11,6 +11,7 @@
 #include "commons.hpp"
 #include "csv_printer.hpp"
 #include "csv_printer.hpp"
+#include "matrix3.hpp"
 
 using std::cout;
 using std::endl;
@@ -179,7 +180,7 @@ void cout_vec(const std::vector<T>& l)
     std::cout << "]" << std::endl;
 }
 
-int main()
+void Q5()
 {
     ////////////////////////////////////////////
     // init
@@ -250,4 +251,31 @@ int main()
     cout << "self convergence: " << endl;
     std::cout << "max: " << mean<double>(sconv_max) << ".... euklidean: " << mean<double>(sconv_eukl) << std::endl; // giving kinda weird results
     // TODO: fix
+}
+
+void QB()
+{
+    ////////////////////////////////////////////
+    // init
+    const ind N_x = 100;
+    const ind N_y = 100;
+    const double start_x = 0;
+    const double stop_x = 1;
+    const double start_y = 0;
+    const double stop_y = 0;
+
+    CSVPrinter printer("out/", "csv");
+}
+
+int main()
+{
+    matrix3<double> mat(4,3,2);
+
+    for (auto i : mat.m_mat) {
+        cout << i << endl;
+    }
+
+    cout << mat << endl;
+
+    return 0;
 }

@@ -342,40 +342,19 @@ void QB()
 {
     ////////////////////////////////////////////
     // init
-    const ind N_x = 100;
-    const ind N_y = 100;
-    const double start_x = 0;
-    const double stop_x = 1;
-    const double start_y = 0;
-    const double stop_y = 0;
-
-    CSVPrinter printer("out/", "csv");
-}
-
-
-
-int main()
-{
-    matrix m1(3,3,3);
-    matrix m2(3,3,3);
-
-    m1(1,1,1) = 5;
-    m2(2,2,2) = 3;
-    m1(2,2,2) = 1;
-
-    cout << m2 - m1 << endl;
-
-    return 0;
+    const std::array<ind, 3> N{50, 50, 50}; // x y z
+    const std::array<double, 3> start{0.0, 0.0, 0.0}; // x y z
+    const std::array<double, 3> stop{2.0, 2.0, 2.0}; // x y z
 
     fOfxyz foo = [](double x, double y, double z) { return 2*x*y + y*y*z; };
     fOfxyz foo_xy = [](double x, double y, double z) { return 2; };
     fOfxyz foo_yz = [](double x, double y, double z) { return 2*y; };
 
-    auto x = linspace(0, 5, 100);
+    auto x = linspace(start[0], stop[0], N[0]);
     double hx = x[1] - x[0];
-    auto y = linspace(0, 5, 100);
+    auto y = linspace(start[1], stop[1], N[1]);
     double hy = y[1] - y[0];
-    auto z = linspace(0, 5, 100);
+    auto z = linspace(start[2], stop[2], N[2]);
     double hz = z[1] - z[0];
 
     matrix mat = create_matrix_with_vals(x, y, z, foo);
@@ -384,8 +363,38 @@ int main()
     matrix mat_yz_a = create_matrix_with_vals(x, y, z, foo_yz);
     matrix mat_yz_n = first_mixed_deriv_2nd_order(mat, 2, 3, hy, hz);
 
-    cout << norm_max((mat_xy_a - mat_xy_n).m_mat) << endl; // TODO: fix
-    cout << norm_max((mat_yz_a - mat_yz_n).m_mat) << endl;
+    matrix mat_xy_diff(mat_xy_a.get_shape());
+    matrix mat_yz_diff(mat_yz_a.get_shape());
+
+    matrix t_1 = mat_xy_a - mat_xy_n;
+    matrix t_2 = mat_yz_a - mat_yz_n;
+
+
+    // do not copy ghosts
+    for (ind i = 1; i < x.size() - 1; ++i) {
+        for (ind j = 1; j < y.size() - 1; ++j) {
+            for (ind k = 0; k < z.size(); ++k) {
+                mat_xy_diff(i,j,k) = t_1(i,j,k);
+            }
+        }
+    }
+
+    for (ind i = 0; i < x.size(); ++i) {
+        for (ind j = 1; j < y.size() - 1; ++j) {
+            for (ind k = 1; k < z.size() - 1; ++k) {
+                mat_yz_diff(i,j,k) = t_2(i,j,k);
+            }
+        }
+    }
+
+    cout << norm_max(mat_xy_diff.m_mat) << endl;
+    cout << norm_max(mat_yz_diff.m_mat) << endl;
+}
+
+
+int main()
+{
+    QB();
 
     return 0;
 }

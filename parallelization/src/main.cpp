@@ -12,6 +12,7 @@
 #include "csv_printer.hpp"
 #include "csv_printer.hpp"
 #include "matrix3.hpp"
+#include "runge_kutta.hpp"
 
 using std::cout;
 using std::endl;
@@ -308,7 +309,7 @@ void Q5()
     std::vector<list> numericals;
     std::vector<list> x_vals;
     std::vector<double> step_sizes{0.2};
-    const unsigned step_size_num = 10;
+    const unsigned step_size_num = 15;
     for (unsigned i = 1; i <= step_size_num; ++i) {
         step_sizes.push_back(step_sizes[i-1]*0.5);
     }
@@ -329,13 +330,22 @@ void Q5()
 
     cout << "convergence: " << endl;
     std::cout << "max: " << mean<double>(conv_max) << ".... euklidean: " << mean<double>(conv_eukl) << std::endl;
+    cout << "max: ";
+    cout_vec<double>(conv_max);
+    cout << "\neudl: ";
+    cout_vec<double>(conv_eukl);
+    cout << endl;
 
     auto sconv_max = self_convergence_test(norm_max, numericals, 1);
     auto sconv_eukl = self_convergence_test(norm_eukl, numericals, 1);
 
-    cout << "self convergence: " << endl;
-    std::cout << "max: " << mean<double>(sconv_max) << ".... euklidean: " << mean<double>(sconv_eukl) << std::endl; // giving kinda weird results
-    // TODO: fix
+    cout << "self-convergence: " << endl;
+    std::cout << "max: " << mean<double>(sconv_max) << ".... euklidean: " << mean<double>(sconv_eukl) << std::endl;
+    cout << "max: ";
+    cout_vec<double>(sconv_max);
+    cout << "\neudl: ";
+    cout_vec<double>(sconv_eukl);
+    cout << endl;
 }
 
 void QB()
@@ -391,10 +401,68 @@ void QB()
     cout << norm_max(mat_yz_diff.m_mat) << endl;
 }
 
+struct var {
+    double q;
+    double p;
+
+    // no need to take care of move constructor or other, since it's just doubles
+    var() : q{0.0}, p{0.0}
+    { }
+    var(double aq, double ap) : q{aq}, p{ap}
+    { }
+
+    var operator+(const var& other) const 
+    {
+        return var{other.q + q, other.p + p};
+    }
+    var& operator+=(const var& other)
+    {
+        q += other.q;
+        p += other.p;
+        return *this;
+    }
+    var operator*(double val) const
+    {
+        return var{q*val, p*val};
+    }
+    friend std::ostream& operator<<(std::ostream& os, const var& v)
+    {
+        os << "(" << v.q << ", " << v.p << ")";
+        return os;
+    }
+};
+var operator*(double val, const var& v) { return v*val; }
+var operator/(const var& v, double val) { return var{v.q / val, v.p / val}; }
+
+void Q6_standard()
+{
+    const double m = 1.;
+    RK<var>::func F = [m](const var& pq) { return var{ pq.p / m, -m*pq.q }; };
+
+    const size_t N = 1000;
+    RK<var>::list u(N, {1., 0.});
+    // std::transform(u.begin(), u.end(), u.begin(), F);
+
+    RK<var> solver;
+    const double dt = 0.01;
+    const double max_time = 100;
+    list times{0.0};
+    list vals{u[0].q};
+
+    for (double t = 0; t < max_time; t += dt) {
+        solver.timestep(u, F, dt);
+        // times.push_back(t);
+        // vals.push_back(u[0].q);
+    }
+
+    // CSVPrinter printer("out/", "csv");
+
+    // printer.print(times, vals, "RK");
+}
 
 int main()
 {
-    QB();
+    Q6_standard();
 
     return 0;
 }

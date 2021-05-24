@@ -15,6 +15,8 @@ def plot_Q6_standard():
     plt.xlabel("t")
     plt.ylabel("q(t)")
 
+    plt.ylim((-1.5, 1.5))
+
     plt.title("dt=0.5, m=1")
 
     plt.legend(loc="best")

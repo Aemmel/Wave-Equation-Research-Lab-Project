@@ -439,9 +439,8 @@ void Q6_standard()
     const double m = 1.;
     RK<var>::func F = [m](const var& pq) { return var{ pq.p / m, -m*pq.q }; };
 
-    const size_t N = 1000;
+    const size_t N = 1;
     RK<var>::list u(N, {1., 0.});
-    // std::transform(u.begin(), u.end(), u.begin(), F);
 
     RK<var> solver;
     const double dt = 0.01;
@@ -450,14 +449,14 @@ void Q6_standard()
     list vals{u[0].q};
 
     for (double t = 0; t < max_time; t += dt) {
-        solver.timestep(u, F, dt);
-        // times.push_back(t);
-        // vals.push_back(u[0].q);
+        solver.timestep(u, F, dt, RK<var>::RK_Method::STANDARD_4);
+        times.push_back(t);
+        vals.push_back(u[0].q);
     }
 
-    // CSVPrinter printer("out/", "csv");
+    CSVPrinter printer("out/", "csv");
 
-    // printer.print(times, vals, "RK");
+    printer.print(times, vals, "RK");
 }
 
 int main()

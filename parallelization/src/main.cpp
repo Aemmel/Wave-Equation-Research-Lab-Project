@@ -191,29 +191,37 @@ matrix first_mixed_deriv_2nd_order(const matrix& u, unsigned short c1, unsigned 
 // etc..
 // thus numerical[0][:] == numerical[1][:2:] e.g., i.e. we assume numerical[i][0] == numerical[j][0] for all i,j
 // though we ignore the gost cells, thus it should read numerical[0][n_ghost+1:n_ghost] = numerical[1][n_ghost+1:2:n_ghost]
-std::vector<double> convergence_test(norm norm_f, list analytical, std::vector<list> numerical, ind num_of_ghost=0)
+template<class L>
+std::vector<double> convergence_test(std::function<double (L)> norm_f, L analytical, std::vector<L> numerical, typename L::size_type num_of_ghost=0)
 {
     std::vector<double> conv_orders;
+    using ind = typename L::size_type;
 
     for (ind num = 0; num < numerical.size() - 1; ++num) {
-        list temp(analytical.size(), 0.0);
+        L temp(analytical.size(), 0.0);
         // calculate |f(x) - f^h(x)| / |f(x) - f^{h/2}(x)|
         for (ind i = num_of_ghost; i < analytical.size() - num_of_ghost; ++i) {
             ind ind_h = std::pow(2, num)*i;
             ind ind_h_half = ind_h*2;
             temp[i] = std::fabs( (analytical[i] - numerical[num][ind_h]) 
                     / (analytical[i] - numerical[num+1][ind_h_half]) );
+            if (temp[i] != temp[i]) { // if NaN
+                temp[i] = 0; // set to zero, since error was too small
+            }
         }
 
+        std::cout << endl;
         // calculate convergence order
         conv_orders.push_back( std::sqrt(norm_f(temp)) ); // ghost cells should be fine, since they are zero
     }
+
 
     return conv_orders;
 }
 
 // similar comments to above
-std::vector<double> self_convergence_test(norm norm_f, std::vector<list> numerical, ind num_of_ghost=0)
+template<class L>
+std::vector<double> self_convergence_test(std::function<double (L)> norm_f, std::vector<L> numerical, typename L::size_type num_of_ghost=0)
 {
     std::vector<double> conv_orders;
 
@@ -233,7 +241,8 @@ std::vector<double> self_convergence_test(norm norm_f, std::vector<list> numeric
     return conv_orders;
 }
 
-double norm_max(list l)
+template<class L>
+double norm_max(L l)
 {
     return *std::max_element(l.begin(), l.end());
 }
@@ -307,7 +316,7 @@ void Q5()
     ////////////////////////////////////////////
     // test convergence
     std::vector<list> numericals;
-    std::vector<list> x_vals;
+    // std::vector<list> x_vals;
     std::vector<double> step_sizes{0.2};
     const unsigned step_size_num = 15;
     for (unsigned i = 1; i <= step_size_num; ++i) {
@@ -317,7 +326,7 @@ void Q5()
 
     for (const auto &s : step_sizes) {
         list x = arange(start, stop, s); // use local
-        x_vals.push_back(x);
+        // x_vals.push_back(x);
         list y = create_list_with_vals(x, sin_4); // could be done more efficiently by computing it once with smallest stepsize.. eh..
 
         numericals.push_back(first_deriv_2nd_order(y, s));
@@ -325,8 +334,8 @@ void Q5()
         // cout_vec<double>(x);
     }
 
-    auto conv_max = convergence_test(norm_max, analytical, numericals, 1);
-    auto conv_eukl = convergence_test(norm_eukl, analytical, numericals, 1);
+    auto conv_max = convergence_test<list>(norm_max<list>, analytical, numericals, 1);
+    auto conv_eukl = convergence_test<list>(norm_eukl, analytical, numericals, 1);
 
     cout << "convergence: " << endl;
     std::cout << "max: " << mean<double>(conv_max) << ".... euklidean: " << mean<double>(conv_eukl) << std::endl;
@@ -336,8 +345,8 @@ void Q5()
     cout_vec<double>(conv_eukl);
     cout << endl;
 
-    auto sconv_max = self_convergence_test(norm_max, numericals, 1);
-    auto sconv_eukl = self_convergence_test(norm_eukl, numericals, 1);
+    auto sconv_max = self_convergence_test<list>(norm_max<list>, numericals, 1);
+    auto sconv_eukl = self_convergence_test<list>(norm_eukl, numericals, 1);
 
     cout << "self-convergence: " << endl;
     std::cout << "max: " << mean<double>(sconv_max) << ".... euklidean: " << mean<double>(sconv_eukl) << std::endl;
@@ -442,21 +451,54 @@ void Q6_standard()
     const size_t N = 1;
     RK<var>::list u(N, {1., 0.});
 
-    RK<var> solver;
+    RK<var> solver(RK<var>::RK_Method::LOW_STO_4, N);
     const double dt = 0.01;
-    const double max_time = 100;
+    double max_time = 100;
     list times{0.0};
     list vals{u[0].q};
 
     for (double t = 0; t < max_time; t += dt) {
-        solver.timestep(u, F, dt, RK<var>::RK_Method::STANDARD_4);
-        times.push_back(t);
+        solver.timestep(u, F, dt);
+        times.push_back(t + dt);
         vals.push_back(u[0].q);
     }
 
     CSVPrinter printer("out/", "csv");
 
     printer.print(times, vals, "RK");
+
+    ////////////////////////////////////////////
+    // test convergence
+    std::vector<std::vector<double>> numericals;
+    std::vector<double> step_sizes{5};
+    const unsigned step_size_num = 15;
+    max_time = 10;
+    for (unsigned i = 1; i <= step_size_num; ++i) {
+        step_sizes.push_back(step_sizes[i-1]*0.5);
+    }
+    std::vector<double> analytical;
+    // fill analytical
+    for (double t = 0; t < max_time; t += step_sizes[0]) {
+        analytical.push_back(std::cos(t));
+    }
+
+    // fill numerical (reuse dt, since local one is used inside loop)
+    for (const auto &dt : step_sizes) {
+        u[0] = var{1., 0.};
+        numericals.push_back(std::vector<double>{u[0].q});
+        for (double t = 0; t < max_time; t += dt) {
+            solver.timestep(u, F, dt);
+            numericals[numericals.size()-1].push_back(u[0].q);
+        }
+    }
+
+    auto conv = convergence_test<list>(norm_max<list>, analytical, numericals, 0);
+    cout << "convergence test: " << endl;
+    cout_vec<double>(conv);
+
+    auto self_conv = self_convergence_test<list>(norm_max<list>, numericals, 0);
+    cout << "self-convergence test: " << endl;
+    cout_vec<double>(self_conv);
 }
 
 int main()

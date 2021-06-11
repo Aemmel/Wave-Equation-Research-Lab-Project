@@ -17,7 +17,7 @@ def plot_Q6_standard():
 
     plt.ylim((-1.5, 1.5))
 
-    plt.title("dt=0.5, m=1")
+    plt.title("dt=0.01, m=1")
 
     plt.legend(loc="best")
     plt.show()

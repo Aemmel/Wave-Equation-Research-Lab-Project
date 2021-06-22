@@ -5,7 +5,6 @@
 #include <fstream>
 #include <vector>
 
-#include "commons.hpp"
 
 class CSVPrinter 
 {
@@ -21,5 +20,5 @@ public:
     CSVPrinter(std::string file_prefix, std::string extension);
     // void print(const State &state, double time) override;
 
-    void print(const list& x, const list &y, std::string file_name, unsigned num_ghost=0) const;
+    void print(const std::vector<double> &x, const std::vector<double> &y, std::string file_name, unsigned num_ghost=0) const;
 };

@@ -8,7 +8,7 @@ CSVPrinter::CSVPrinter(std::string file_prefix, std::string file_extension) :
 
 }
 
-void CSVPrinter::print(const list& x, const list &y, std::string file_name, unsigned num_ghost) const
+void CSVPrinter::print(const std::vector<double> &x, const std::vector<double> &y, std::string file_name, unsigned num_ghost) const
 {
     std::ofstream file;
     file.open(m_file_prefix + file_name + "." + m_file_extension);
@@ -23,7 +23,7 @@ void CSVPrinter::print(const list& x, const list &y, std::string file_name, unsi
         return;
     }
 
-    for (ind i = num_ghost; i < x.size() - num_ghost; ++i) {
+    for (size_t i = num_ghost; i < x.size() - num_ghost; ++i) {
         file << x[i] << delim << y[i] << std::endl; // trailing endl shoudn't cause problems
     }
 

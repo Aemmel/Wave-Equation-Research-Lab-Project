@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 def plot_Q6_standard():
-    data = np.genfromtxt("out/RK.csv", delimiter=",", skip_header=1, comments="#").transpose()
+    data = np.genfromtxt("out/HO_2dsolver.csv", delimiter=",", skip_header=1, comments="#").transpose()
 
     start = data[0][0]
     stop = data[0][-1]
@@ -22,9 +22,9 @@ def plot_Q6_standard():
     plt.legend(loc="best")
     plt.show()
 
-
 if __name__ == "__main__":
     plot_Q6_standard()
+    
 
     # for i in range(5, 12):
     #     data = pd.read_csv("out/num_conv_" + str(i) + ".csv")

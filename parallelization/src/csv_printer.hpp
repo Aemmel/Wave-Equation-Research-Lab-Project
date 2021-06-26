@@ -5,6 +5,7 @@
 #include <fstream>
 #include <vector>
 
+#include "commons.hpp"
 
 class CSVPrinter 
 {
@@ -21,4 +22,5 @@ public:
     // void print(const State &state, double time) override;
 
     void print(const std::vector<double> &x, const std::vector<double> &y, std::string file_name, unsigned num_ghost=0) const;
+    void print_mat(const Eigen::Matrix<std::complex<double>, Eigen::Dynamic, Eigen::Dynamic>& m, std::string file_name, Eigen::Index num_ghost=0) const;
 };

@@ -12,6 +12,7 @@ enum DIV_AX {
 };
 
 void second_deriv_4th_order(matrix_t &deriv, const matrix_t &orig, double step, DIV_AX ax, ind_t num_ghost=2);
+void second_deriv_2nd_order(matrix_t &deriv, const matrix_t &orig, double step, DIV_AX ax, ind_t num_ghost=1);
 void bc_periodic(matrix_t &m, ind_t num_ghost=2);
 
 // Runge Kutta 4 class
@@ -20,7 +21,7 @@ class RK4
 {
 // typedefs
 public:
-    using func_t = std::function<matrix_t (const matrix_t&)>;
+    using func_t = std::function<matrix_t (matrix_t&)>;
 
 // variables
 private:

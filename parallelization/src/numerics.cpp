@@ -52,6 +52,35 @@ void second_deriv_4th_order(matrix_t &deriv, const matrix_t &orig, double step, 
     }
 }
 
+void second_deriv_2nd_order(matrix_t &deriv, const matrix_t &orig, double step, DIV_AX ax, ind_t num_ghost)
+{
+    // TESTED with 1D stuff
+
+    const double step_fac = 1. / (step*step);
+
+    // not pretty, but probably the fastest way to do this
+    if (ax == DIV_AX::X) {
+        for (ind_t j = num_ghost; j < orig.cols() - num_ghost; ++j) {
+            for (ind_t i = num_ghost; i < orig.rows() - num_ghost; ++i) {
+                deriv(i, j) = ( 
+                    + 1. * (orig(i, j+1) + orig(i, j-1))
+                    + (-2.) * orig(i,j)
+                 ) * step_fac;
+            }
+        }
+    } 
+    else if (ax == DIV_AX::Y) {
+        for (ind_t j = num_ghost; j < orig.cols() - num_ghost; ++j) {
+            for (ind_t i = num_ghost; i < orig.rows() - num_ghost; ++i) {
+                deriv(i, j) = ( 
+                    + 1. * (orig(i+1, j) + orig(i-1, j))
+                    + (-2.) * orig(i,j)
+                 ) * step_fac;
+            }
+        }
+    }
+}
+
 // periodic boundary condition
 // following situation:
 // x1 x2 o1 o2 ... o3 o4 y1 y2
@@ -108,12 +137,15 @@ void RK4::time_step(matrix_t &mat, func_t foo, const double dt)
 void RK4::quadrature(matrix_t &mat, func_t foo, const low_sto_coeff& coeff)
 {
     matrix_t &S1 = mat;
-    matrix_t S2(mat.rows(), mat.cols()); // init to "zero"?
+    // matrix_t S2(mat.rows(), mat.cols()); // init to "zero"?
+    matrix_t S2 = matrix_t::Zero(mat.rows(), mat.cols());
     // S2.zero_self();
 
     for (unsigned i = 0; i < 4; ++i) {
         S2 += coeff.delta[i] * S1;
 
-        S1 = coeff.gamma_1[i] * S1 + coeff.gamma_2[i] * S2 + coeff.beta[i]*foo(S1);
+        auto temp = foo(S1);
+
+        S1 = coeff.gamma_1[i] * S1 + coeff.gamma_2[i] * S2 + coeff.beta[i]*temp;
     }
 }

@@ -61,8 +61,13 @@ using ind_t = Eigen::Index;
 */
 
 
-// // Matrix Pointer at i giving mat.data() + i
-// inline element_t* mp_at(matrix_t &mat, ind_t i)
-// {
-//     return mat.data() + i;
-// }
+// Matrix Pointer at i giving mat.data() + i
+inline element_t* mp_at(matrix_t &mat, ind_t i)
+{
+    return mat.data() + i;
+}
+
+inline const element_t* mp_at(const matrix_t &mat, ind_t i)
+{
+    return mat.data() + i;
+}

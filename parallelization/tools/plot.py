@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib import cm
 import pandas as pd
 
 def plot_Q6_standard():
@@ -22,21 +23,41 @@ def plot_Q6_standard():
     plt.legend(loc="best")
     plt.show()
 
-if __name__ == "__main__":
-    # plot_Q6_standard()
+def plot_1d_wave():
+    file_names = ["0.5", "1.0", "1.5", "2.0", "2.5", "3.0"]
+    file_names = ["out/t=" + t + ".dat" for t in file_names]
 
-    x = np.linspace(-2*np.pi, 2*np.pi, 1000)
-    y = np.genfromtxt("out.txt")
-
-    plt.plot(x, y)
-    # plt.ylim(-1.5, 1.5)
-    plt.show()
+    x = np.linspace(-5, 5, 1000)
+    opacity = np.linspace(0, 1, len(file_names) + 1)
+    for i, file in enumerate(file_names):
+        y = np.genfromtxt(file, delimiter=",")
+        plt.plot(x, y, color=(0, 0, 0, opacity[i + 1]))
     
+    plt.show()
 
-    # for i in range(5, 12):
-    #     data = pd.read_csv("out/num_conv_" + str(i) + ".csv")
-    #     data = np.array(data).transpose()
-    #     plt.plot(data[0], data[1], label=str(i))
+def plot_3d(file):
+    fig = plt.figure()
+    ax = fig.add_subplot(projection="3d")
 
-    # plt.legend(loc="best")
-    # plt.show()
+    X = np.linspace(-5, 5, 100)
+    Y = np.linspace(-5 ,5, 100)
+
+    Z = 0 # read in data
+
+    # Plot the surface.
+    surf = ax.plot_surface(X, Y, Z, cmap=cm.coolwarm,
+                        linewidth=0, antialiased=False)
+
+    # # Customize the z axis.
+    # ax.set_zlim(-1.01, 1.01)
+    # ax.zaxis.set_major_locator(LinearLocator(10))
+    # # A StrMethodFormatter is used automatically
+    # ax.zaxis.set_major_formatter('{x:.02f}')
+
+    # Add a color bar which maps values to colors.
+    fig.colorbar(surf, shrink=0.5, aspect=5)
+
+    plt.show()
+
+if __name__ == "__main__": 
+    plot_3d("test")

@@ -6,7 +6,12 @@
 
 #include "commons.hpp"
 
-void second_deriv_4th_order(matrix_t &deriv, const matrix_t &orig, double step, unsigned ax, ind_t num_ghost=2);
+enum DIV_AX {
+    X,
+    Y
+};
+
+void second_deriv_4th_order(matrix_t &deriv, const matrix_t &orig, double step, DIV_AX ax, ind_t num_ghost=2);
 void bc_periodic(matrix_t &m, ind_t num_ghost=2);
 
 // Runge Kutta 4 class
@@ -15,7 +20,7 @@ class RK4
 {
 // typedefs
 public:
-    using func_t = std::function<element_t (const element_t&)>;
+    using func_t = std::function<matrix_t (const matrix_t&)>;
 
 // variables
 private:

@@ -21,15 +21,14 @@
 //  xxxxxxx
 //  xxxxxxx
 // where only the o are updated, the x are not
-void second_deriv_4th_order(matrix_t &deriv, const matrix_t &orig, double step, unsigned ax, ind_t num_ghost)
+void second_deriv_4th_order(matrix_t &deriv, const matrix_t &orig, double step, DIV_AX ax, ind_t num_ghost)
 {
     // TESTED with 1D stuff
 
     const double step_fac = 1. / (12. * step*step);
 
     // not pretty, but probably the fastest way to do this
-    // 0 means x, so columns
-    if (ax == 0) {
+    if (ax == DIV_AX::X) {
         for (ind_t j = num_ghost; j < orig.cols() - num_ghost; ++j) {
             for (ind_t i = num_ghost; i < orig.rows() - num_ghost; ++i) {
                 deriv(i, j) = ( 
@@ -40,8 +39,7 @@ void second_deriv_4th_order(matrix_t &deriv, const matrix_t &orig, double step, 
             }
         }
     } 
-    // 1 means y, so rows
-    else if (ax == 1) {
+    else if (ax == DIV_AX::Y) {
         for (ind_t j = num_ghost; j < orig.cols() - num_ghost; ++j) {
             for (ind_t i = num_ghost; i < orig.rows() - num_ghost; ++i) {
                 deriv(i, j) = ( 
@@ -51,8 +49,6 @@ void second_deriv_4th_order(matrix_t &deriv, const matrix_t &orig, double step, 
                  ) * step_fac;
             }
         }
-    } else {
-        std::cerr << "second_deriv_4th_order: only ax=0 or 1 allowed" << std::endl;
     }
 }
 
@@ -118,6 +114,6 @@ void RK4::quadrature(matrix_t &mat, func_t foo, const low_sto_coeff& coeff)
     for (unsigned i = 0; i < 4; ++i) {
         S2 += coeff.delta[i] * S1;
 
-        S1 = coeff.gamma_1[i] * S1 + coeff.gamma_2[i] * S2 + coeff.beta[i]*S1.unaryExpr(foo);
+        S1 = coeff.gamma_1[i] * S1 + coeff.gamma_2[i] * S2 + coeff.beta[i]*foo(S1);
     }
 }

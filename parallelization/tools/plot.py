@@ -39,14 +39,16 @@ def plot_3d(file):
     fig = plt.figure()
     ax = fig.add_subplot(projection="3d")
 
-    X = np.linspace(-5, 5, 100)
-    Y = np.linspace(-5 ,5, 100)
+    X = np.linspace(-10, 10, 500)
+    Y = np.linspace(-10, 10, 500)
+    X, Y = np.meshgrid(X, Y)
 
-    Z = 0 # read in data
+    Z = np.genfromtxt(file, delimiter=",")
 
     # Plot the surface.
-    surf = ax.plot_surface(X, Y, Z, cmap=cm.coolwarm,
-                        linewidth=0, antialiased=False)
+    # surf = ax.plot_surface(X, Y, Z, cmap=cm.coolwarm,
+                        # linewidth=0, antialiased=False)
+    ax.plot_wireframe(X, Y, Z)
 
     # # Customize the z axis.
     # ax.set_zlim(-1.01, 1.01)
@@ -55,9 +57,9 @@ def plot_3d(file):
     # ax.zaxis.set_major_formatter('{x:.02f}')
 
     # Add a color bar which maps values to colors.
-    fig.colorbar(surf, shrink=0.5, aspect=5)
+    # fig.colorbar(surf, shrink=0.5, aspect=5)
 
     plt.show()
 
 if __name__ == "__main__": 
-    plot_3d("test")
+    plot_3d("out/3D_t=9.5.dat")

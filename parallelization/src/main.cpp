@@ -95,7 +95,6 @@ void wave_eq_1D_periodic_bc_basic()
     const ind_t cols = 1000;
     const ind_t num_ghost = 2;
     matrix_t field_matrix = matrix_t::Zero(rows + 2*num_ghost, cols + 2*num_ghost);
-    matrix_t field_matrix_deriv = matrix_t::Zero(field_matrix.rows(), field_matrix.cols());
 
     const double x_min = -5;
     const double x_max = 5;
@@ -145,6 +144,91 @@ void wave_eq_1D_periodic_bc_basic()
             print_timer = 0.;
 
             printer.print_mat(field_matrix, "t=" + format(t+dt, 1), 2);
+        }
+    }
+}
+
+matrix_t we_2D_func_full(matrix_t& m, const double dx, const double dy)
+{
+    matrix_t deriv_x = matrix_t(m.rows(), m.cols());
+    matrix_t deriv_y = matrix_t(m.rows(), m.cols());
+    bc_periodic(m);
+    second_deriv_4th_order(deriv_x, m, dx, DIV_AX::X, 2);
+    second_deriv_4th_order(deriv_y, m, dy, DIV_AX::Y, 2);
+
+    deriv_x += deriv_y;
+
+    for (ind_t i = 0; i < m.size(); ++i) {
+        *mp_at(deriv_x, i) = element_t(mp_at(m, i)->imag(), 1*mp_at(deriv_x, i)->real());
+    }
+
+    return deriv_x;
+}
+
+void wave_eq_2D_periodic_bc_basic()
+{
+    // complex numbers, where
+    // real == phi
+    // imag == Pi
+
+    const ind_t rows = 500;
+    const ind_t cols = 500;
+    const ind_t num_ghost = 2;
+    matrix_t field_matrix = matrix_t::Zero(rows + 2*num_ghost, cols + 2*num_ghost);
+
+    const double x_min = -10;
+    const double x_max = 10;
+    const double dx = (x_max - x_min) / (cols - 1.); // behaviour as in np.linspace
+    const double y_min = -10;
+    const double y_max = 10;
+    const double dy = (y_max - y_min) / (rows - 1.); // behaviour as in np.linspace
+
+    RK4::func_t we_func = std::bind(we_2D_func_full, std::placeholders::_1, dx, dy);
+
+    // init field_matrix with function
+    // first fill x and y. Using real==x and imag==y
+    for (ind_t j = num_ghost; j < field_matrix.cols() - num_ghost; ++j) {
+        for (ind_t i = num_ghost; i < field_matrix.rows() - num_ghost; ++i) {
+            field_matrix(i, j) = (x_min + (i-num_ghost)*dx) + 1i*(y_min + (j-num_ghost)*dy);
+        }
+    }
+
+    // fill with function
+    auto init_func = [](element_t x) {
+        return std::exp(-x.real()*x.real() - x.imag()*x.imag());
+    };
+
+    field_matrix = field_matrix.unaryExpr(init_func);
+
+    RK4 solver;
+    const double start_time = 0.0;
+    const double stop_time = 10;
+    const double dt = 0.005;
+
+    const double print_every_t = 0.5;
+
+    std::cerr << "CFL=" << dt / dx << endl;
+    if (dt / dx >= 1.) {
+        return;
+    }
+
+    std::vector<double> times{0.0};
+    std::vector<double> qs{1.0};
+
+    CSVPrinter printer("out/", "dat");
+
+    printer.print_mat(field_matrix, "3D_t=0.0", 2);
+
+    // NOTE: currently doing twice as many operations in second derivative,
+    // since it's also calculating for Pi, not only phi. This is uneccessary.. hmm...
+    for (double t = start_time, print_timer = 0.; t < stop_time; t += dt, print_timer += dt) {
+        // do timestep
+        solver.time_step(field_matrix, we_func, dt);
+
+        if (print_timer > print_every_t) {
+            print_timer = 0.;
+
+            printer.print_mat(field_matrix, "3D_t=" + format(t+dt, 1), 2);
         }
     }
 }
@@ -205,7 +289,7 @@ int main()
 
     // TODO: WRITE TEST FUNCTIONS!!
 
-    wave_eq_1D_periodic_bc_basic();
+    wave_eq_2D_periodic_bc_basic();
     // HO_test();
     // test_second_deriv();
 

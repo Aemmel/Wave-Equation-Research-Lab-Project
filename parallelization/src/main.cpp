@@ -129,10 +129,9 @@ void wave_eq_1D_periodic_bc_basic()
         return;
     }
 
-    std::vector<double> times{0.0};
-    std::vector<double> qs{1.0};
-
     CSVPrinter printer("out/", "dat");
+    printer.print_mat(field_matrix, "t=0.0", 2);
+
 
     // NOTE: currently doing twice as many operations in second derivative,
     // since it's also calculating for Pi, not only phi. This is uneccessary.. hmm...
@@ -146,6 +145,248 @@ void wave_eq_1D_periodic_bc_basic()
             printer.print_mat(field_matrix, "t=" + format(t+dt, 1), 2);
         }
     }
+}
+
+void wave_eq_1D_periodic_bc_basic_convergence_space()
+{
+    // complex numbers, where
+    // real == phi
+    // imag == Pi
+
+    const ind_t rows = 1;
+    const ind_t cols = 100;
+    const ind_t num_ghost = 2;
+    matrix_t field_matrix = matrix_t::Zero(rows, cols);
+    matrix_t field_matrix_half = matrix_t::Zero(2*rows, 2*cols);
+    matrix_t field_matrix_ana = matrix_t::Zero(rows, cols);
+
+    const double x_min = -5;
+    const double x_max = 5;
+    const double dx = (x_max - x_min) / (cols - 1.); // behaviour as in np.linspace
+
+    RK4::func_t we_func = std::bind(we_func_full, std::placeholders::_1, dx);
+    RK4::func_t we_func_half = std::bind(we_func_full, std::placeholders::_1, dx / 2.);
+
+    // init field_matrix with function
+    // first fill x_grid
+    double temp_x = x_min;
+    for (ind_t i = 0; i < field_matrix.cols(); ++i) {
+        field_matrix(0, i) = temp_x;
+        field_matrix_ana(0, i) = temp_x;
+        temp_x += dx;
+    }
+
+    // this is a bit fishy, since we are basically ignoring the first physical line and only use the second physical line.. but it should work
+    temp_x = x_min;
+    for (ind_t i = 0; i < field_matrix_half.cols(); ++i) {
+        field_matrix_half(0, i) = temp_x;
+        temp_x += dx / 2.0;
+    }
+
+    field_matrix = add_ghost(field_matrix, num_ghost);
+    field_matrix_half = add_ghost(field_matrix_half, num_ghost);
+
+    // fill with function
+    auto init_func = [](element_t x) {
+        return std::exp(-x.real()*x.real());
+    };
+
+    field_matrix = field_matrix.unaryExpr(init_func);
+    field_matrix_half = field_matrix_half.unaryExpr(init_func);
+
+    RK4 solver;
+    const double start_time = 0.0;
+    const double stop_time = 2;
+    const double dt = 0.001;
+
+    std::cerr << "CFL=" << dt / dx << endl;
+    if (dt / dx >= 1.) {
+        return;
+    }
+
+    // NOTE: currently doing twice as many operations in second derivative,
+    // since it's also calculating for Pi, not only phi. This is uneccessary.. hmm...
+    double t = start_time;
+    for (; t < stop_time; t += dt) {
+        // do timestep
+        solver.time_step(field_matrix, we_func, dt);
+        solver.time_step(field_matrix_half, we_func_half, dt);
+    }
+    t -= dt; // account for overcounting by for loop
+
+    // fill analytical
+    auto ana_func = [t, init_func](element_t x) {
+        return 1. / 2. * (init_func(x - t) + init_func(x + t));
+    };
+
+    field_matrix_ana = field_matrix_ana.unaryExpr(ana_func);
+    field_matrix_ana = add_ghost(field_matrix_ana, num_ghost);
+    
+    std::cerr << "analytical convergence space: " << anal_conv_oder_space(field_matrix_ana, field_matrix, field_matrix_half, 2) << endl;
+
+    // CSVPrinter printer;
+    // printer.print_mat(field_matrix, "conv_h", 2);
+    // printer.print_mat(field_matrix_half, "conv_h_2", 2);
+    // printer.print_mat(field_matrix_ana, "conv_ana", 2);
+}
+
+void wave_eq_1D_periodic_bc_basic_convergence_time()
+{
+    // complex numbers, where
+    // real == phi
+    // imag == Pi
+
+    const ind_t rows = 1;
+    const ind_t cols = 500;
+    const ind_t num_ghost = 2;
+    matrix_t field_matrix = matrix_t::Zero(rows, cols);
+    matrix_t field_matrix_half = matrix_t::Zero(rows, cols);
+    matrix_t field_matrix_ana = matrix_t::Zero(rows, cols);
+
+    const double x_min = -5;
+    const double x_max = 5;
+    const double dx = (x_max - x_min) / (cols - 1.); // behaviour as in np.linspace
+
+    RK4::func_t we_func = std::bind(we_func_full, std::placeholders::_1, dx);
+
+    // init field_matrix with function
+    // first fill x_grid
+    double temp_x = x_min;
+    for (ind_t i = 0; i < field_matrix.cols(); ++i) {
+        field_matrix(0, i) = temp_x;
+        field_matrix_ana(0, i) = temp_x;
+        field_matrix_half(0, i) = temp_x;
+        temp_x += dx;
+    }
+
+    field_matrix = add_ghost(field_matrix, num_ghost);
+    field_matrix_half = add_ghost(field_matrix_half, num_ghost);
+
+    // fill with function
+    auto init_func = [](element_t x) {
+        return std::exp(-x.real()*x.real());
+    };
+
+    field_matrix = field_matrix.unaryExpr(init_func);
+    field_matrix_half = field_matrix_half.unaryExpr(init_func);
+
+    RK4 solver;
+    const double start_time = 0.0;
+    const double stop_time = 3;
+    const double dt = 0.01;
+
+    std::cerr << "CFL=" << dt / dx << endl;
+    if (dt / dx >= 1.) {
+        return;
+    }
+
+    // NOTE: currently doing twice as many operations in second derivative,
+    // since it's also calculating for Pi, not only phi. This is uneccessary.. hmm...
+    double t = start_time;
+    for (; t < stop_time; t += dt) {
+        // do timestep
+        solver.time_step(field_matrix, we_func, dt);
+
+        solver.time_step(field_matrix_half, we_func, dt / 2.);
+        solver.time_step(field_matrix_half, we_func, dt / 2.);
+    }
+
+    t -= dt; // account for overcounting by for loop
+
+    // fill analytical
+    auto ana_func = [t, init_func](element_t x) {
+        return 1. / 2. * (init_func(x - t) + init_func(x + t));
+    };
+
+    field_matrix_ana = field_matrix_ana.unaryExpr(ana_func);
+    field_matrix_ana = add_ghost(field_matrix_ana, num_ghost);
+
+    // cout << field_matrix << endl;
+    // cout << endl;
+    // cout << field_matrix_ana << endl;
+    // cout << endl;
+    // cout << field_matrix_half << endl;
+    // cout << endl;
+    
+    std::cerr << "analytical convergence time: " << anal_conv_oder_time(field_matrix_ana, field_matrix, field_matrix_half, 2) << endl;
+}
+
+void wave_eq_1D_periodic_bc_basic_sconvergence_space()
+{
+    // complex numbers, where
+    // real == phi
+    // imag == Pi
+
+    const ind_t rows = 1;
+    const ind_t cols = 100;
+    const ind_t num_ghost = 2;
+    matrix_t field_matrix = matrix_t::Zero(rows, cols);
+    matrix_t field_matrix_half = matrix_t::Zero(2*rows, 2*cols);
+    matrix_t field_matrix_quart = matrix_t::Zero(4*rows, 4*cols);
+
+    const double x_min = -5;
+    const double x_max = 5;
+    const double dx = (x_max - x_min) / (cols - 1.); // behaviour as in np.linspace
+
+    RK4::func_t we_func = std::bind(we_func_full, std::placeholders::_1, dx);
+    RK4::func_t we_func_half = std::bind(we_func_full, std::placeholders::_1, dx / 2.);
+    RK4::func_t we_func_quart = std::bind(we_func_full, std::placeholders::_1, dx / 4.);
+
+    // init field_matrix with function
+    // first fill x_grid
+    double temp_x = x_min;
+    for (ind_t i = 0; i < field_matrix.cols(); ++i) {
+        field_matrix(0, i) = temp_x;
+        temp_x += dx;
+    }
+
+    // this is a bit fishy, since we are basically ignoring the second physical line and only use the first physical line.. but it should work
+    temp_x = x_min;
+    for (ind_t i = 0; i < field_matrix_half.cols(); ++i) {
+        field_matrix_half(0, i) = temp_x;
+        temp_x += dx / 2.0;
+    }
+
+    temp_x = x_min;
+    for (ind_t i = 0; i < field_matrix_quart.cols(); ++i) {
+        field_matrix_quart(0, i) = temp_x;
+        temp_x += dx / 4.0;
+    }
+
+    field_matrix = add_ghost(field_matrix, num_ghost);
+    field_matrix_half = add_ghost(field_matrix_half, num_ghost);
+    field_matrix_quart = add_ghost(field_matrix_quart, num_ghost);
+
+    // fill with function
+    auto init_func = [](element_t x) {
+        return std::exp(-x.real()*x.real());
+    };
+
+    field_matrix = field_matrix.unaryExpr(init_func);
+    field_matrix_half = field_matrix_half.unaryExpr(init_func);
+    field_matrix_quart = field_matrix_quart.unaryExpr(init_func);
+
+    RK4 solver;
+    const double start_time = 0.0;
+    const double stop_time = 2;
+    const double dt = 0.001;
+
+    std::cerr << "CFL=" << dt / dx << endl;
+    if (dt / dx >= 1.) {
+        return;
+    }
+
+    // NOTE: currently doing twice as many operations in second derivative,
+    // since it's also calculating for Pi, not only phi. This is uneccessary.. hmm...
+    double t = start_time;
+    for (; t < stop_time; t += dt) {
+        // do timestep
+        solver.time_step(field_matrix, we_func, dt);
+        solver.time_step(field_matrix_half, we_func_half, dt);
+        solver.time_step(field_matrix_quart, we_func_half, dt);
+    }
+
+    std::cerr << "self convergence space: " << self_conv_order_space(field_matrix, field_matrix_half, field_matrix_quart, 2) << endl;
 }
 
 matrix_t we_2D_func_full(matrix_t& m, const double dx, const double dy)
@@ -287,9 +528,23 @@ int main()
 
     // cout << m << endl;
 
+
+    // matrix_t m = matrix_t::Constant(2, 3, 1);
+
+    // cout << m << endl;
+
+    // m = add_ghost(m, 2); 
+
+    // cout << "After filling: " << endl;
+    // cout << m << endl;
+
+
     // TODO: WRITE TEST FUNCTIONS!!
 
-    wave_eq_2D_periodic_bc_basic();
+    // wave_eq_1D_periodic_bc_basic();
+    wave_eq_1D_periodic_bc_basic_convergence_space();
+    wave_eq_1D_periodic_bc_basic_convergence_time();
+    wave_eq_1D_periodic_bc_basic_sconvergence_space();
     // HO_test();
     // test_second_deriv();
 

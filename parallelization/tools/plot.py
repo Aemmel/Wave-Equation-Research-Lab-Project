@@ -24,7 +24,7 @@ def plot_Q6_standard():
     plt.show()
 
 def plot_1d_wave():
-    file_names = ["0.5", "1.0", "1.5", "2.0", "2.5", "3.0"]
+    file_names = ["0.0", "0.5", "1.0", "1.5", "2.0", "2.5", "3.0"]
     file_names = ["out/t=" + t + ".dat" for t in file_names]
 
     x = np.linspace(-5, 5, 1000)
@@ -33,6 +33,9 @@ def plot_1d_wave():
         y = np.genfromtxt(file, delimiter=",")
         plt.plot(x, y, color=(0, 0, 0, opacity[i + 1]))
     
+    plt.title(r"From $t=0$ to $t=3.0$ in $0.5$ steps")
+    plt.xlabel(r"$x$")
+    plt.ylabel(r"$\phi(x)$")
     plt.show()
 
 def plot_3d(file):
@@ -47,8 +50,8 @@ def plot_3d(file):
 
     # Plot the surface.
     # surf = ax.plot_surface(X, Y, Z, cmap=cm.coolwarm,
-                        # linewidth=0, antialiased=False)
-    ax.plot_wireframe(X, Y, Z)
+    #                     linewidth=0, antialiased=False)
+    ax.plot_wireframe(X, Y, Z, rstride=30, cstride=30)
 
     # # Customize the z axis.
     # ax.set_zlim(-1.01, 1.01)
@@ -62,4 +65,24 @@ def plot_3d(file):
     plt.show()
 
 if __name__ == "__main__": 
-    plot_3d("out/3D_t=9.5.dat")
+    # plot_3d("out/3D_t=6.0.dat")
+
+    x = np.linspace(-5, 5, 100)
+    y = np.genfromtxt("out/nsg_conv_h.dat", delimiter=",")
+
+    plt.plot(x, y, label="h")
+
+    y = np.genfromtxt("out/nsg_conv_ana.dat", delimiter=",")
+
+    plt.plot(x, y, label="ana")
+
+    x = np.linspace(-5, 5, 200)
+    y = np.genfromtxt("out/nsg_conv_h_2.dat", delimiter=",")
+
+    plt.plot(x, y[0], label="h/2")
+
+    plt.legend()
+
+    plt.show()
+
+    

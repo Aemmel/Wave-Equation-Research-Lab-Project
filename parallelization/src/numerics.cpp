@@ -3,6 +3,29 @@
 #include <iostream>
 #include <cassert>
 
+// go from
+//   oo
+//   oo
+// to (e.g. num_ghost = 2)
+// XXXXXX
+// XXXXXX
+// XXooXX
+// XXooXX
+// XXXXXX
+// XXXXXX
+matrix_t add_ghost(const matrix_t &m, ind_t num_ghost)
+{
+    matrix_t with_ghost = matrix_t::Zero(m.rows() + 2*num_ghost, m.cols() + 2*num_ghost);
+
+    for (ind_t j = 0; j < m.cols(); ++j) {
+        for (ind_t i = 0; i < m.rows(); ++i) {
+            with_ghost(i + num_ghost, j + num_ghost) = m(i, j);
+        }
+    }
+
+    return with_ghost;
+}
+
 // according to Calabrese & Gundlach arXiv:0509119 eq. 15
 // following structure of physical 
 // and ghost cells is assumed(o - physical point, x - ghost cell)
@@ -119,6 +142,108 @@ void bc_periodic(matrix_t &m, ind_t num_ghost)
             m(phys_row_end + 1 + g, j) = m(phys_row_start + g, j);
         }
     }
+}
+
+// convergence order for spatial domain
+// assumes that, for num_ghost = 2, the following holds
+// ana(2, 2), num_h(2, 2) and num_h_half(2, 2) all correspond to the same physical point
+double anal_conv_oder_space(const matrix_t &ana, const matrix_t &num_h, const matrix_t &num_h_half, ind_t num_ghost)
+{
+    assert(ana.size() == num_h.size());
+    assert((ana.rows() - 2*num_ghost)*2 == num_h_half.rows() - 2*num_ghost);
+    assert((ana.cols() - 2*num_ghost)*2 == num_h_half.cols() - 2*num_ghost);
+
+    std::vector<double> numerator;
+    numerator.reserve((ana.rows() - 2*num_ghost)*(ana.cols() - 2*num_ghost)); // only physical grid
+    std::vector<double> denominator;
+    denominator.reserve((ana.rows() - 2*num_ghost)*(ana.cols() - 2*num_ghost));
+
+    for (ind_t j = num_ghost, j_2 = num_ghost; j < ana.cols() - num_ghost; ++j, j_2 += 2) {
+        for (ind_t i = num_ghost, i_2 = num_ghost; i < ana.rows() - num_ghost; ++i, i_2 += 2) {
+            numerator.push_back(std::abs(ana(i,j).real() - num_h(i,j).real()));
+            denominator.push_back(std::abs(ana(i,j).real() - num_h_half(i_2, j_2).real()));
+        }
+    }
+
+    double num = *std::max_element(numerator.begin(), numerator.end());
+    double denom = *std::max_element(denominator.begin(), denominator.end());
+
+    return std::log2(num / denom);
+    // return num / denom;
+}
+
+// convergence order in time domain
+double anal_conv_oder_time(const matrix_t &ana, const matrix_t &num_dt, const matrix_t &num_dt_half, ind_t num_ghost)
+{
+    assert(ana.size() == num_dt.size());
+    assert((ana.rows() - 2*num_ghost)*2 == num_dt_half.rows() - 2*num_ghost);
+    assert((ana.cols() - 2*num_ghost)*2 == num_dt_half.cols() - 2*num_ghost);
+
+    std::vector<double> numerator;
+    numerator.reserve((ana.rows() - 2*num_ghost)*(ana.cols() - 2*num_ghost)); // only physical grid
+    std::vector<double> denominator;
+    denominator.reserve((ana.rows() - 2*num_ghost)*(ana.cols() - 2*num_ghost));
+
+    for (ind_t j = num_ghost; j < ana.cols() - num_ghost; ++j) {
+        for (ind_t i = num_ghost; i < ana.rows() - num_ghost; ++i) {
+            numerator.push_back(std::abs(ana(i,j).real() - num_dt(i,j).real()));
+            denominator.push_back(std::abs(ana(i,j).real() - num_dt_half(i, j).real()));
+        }
+    }
+
+    double num = *std::max_element(numerator.begin(), numerator.end());
+    double denom = *std::max_element(denominator.begin(), denominator.end());
+
+    return std::log2(num / denom);
+    // return num / denom;
+}
+
+double self_conv_order_space(const matrix_t &num_h, const matrix_t &num_h_2, const matrix_t &num_h_4, ind_t num_ghost)
+{
+    assert((num_h.rows() - 2*num_ghost)*2 == num_h_2.rows() - 2*num_ghost);
+    assert((num_h.cols() - 2*num_ghost)*2 == num_h_2.cols() - 2*num_ghost);
+    assert((num_h_2.rows() - 2*num_ghost)*2 == num_h_4.rows() - 2*num_ghost);
+    assert((num_h_2.cols() - 2*num_ghost)*2 == num_h_4.cols() - 2*num_ghost);
+
+    std::vector<double> numerator;
+    numerator.reserve((num_h.rows() - 2*num_ghost)*(num_h.cols() - 2*num_ghost)); // only physical grid
+    std::vector<double> denominator;
+    denominator.reserve((num_h.rows() - 2*num_ghost)*(num_h.cols() - 2*num_ghost));
+
+    for (ind_t j = num_ghost, j_2 = num_ghost, j_4 = num_ghost; j < num_h.cols() - num_ghost; ++j, j_2 += 2, j_4 += 4) {
+        for (ind_t i = num_ghost, i_2 = num_ghost, i_4 = num_ghost; i < num_h.rows() - num_ghost; ++i, i_2 += 2, i_4 += 4) {
+            numerator.push_back(std::abs(num_h(i,j).real() - num_h_2(i_2,j_2).real()));
+            denominator.push_back(std::abs(num_h_2(i_2,j_2).real() - num_h_4(i_4, j_4).real()));
+        }
+    }
+
+    double num = *std::max_element(numerator.begin(), numerator.end());
+    double denom = *std::max_element(denominator.begin(), denominator.end());
+
+    return std::log2(num / denom);
+}
+
+double self_conv_order_time(const matrix_t &num_dt, const matrix_t &num_dt_2, const matrix_t &num_dt_4, ind_t num_ghost)
+{
+    assert(num_dt.size() == num_dt_2.size());
+    assert(num_dt.size() == num_dt_4.size());
+
+    std::vector<double> numerator;
+    numerator.reserve((num_dt.rows() - 2*num_ghost)*(num_dt.cols() - 2*num_ghost)); // only physical grid
+    std::vector<double> denominator;
+    denominator.reserve((num_dt.rows() - 2*num_ghost)*(num_dt.cols() - 2*num_ghost));
+
+    for (ind_t j = num_ghost; j < num_dt.cols() - num_ghost; ++j) {
+        for (ind_t i = num_ghost; i < num_dt.rows() - num_ghost; ++i) {
+            numerator.push_back(std::abs(num_dt(i,j).real() - num_dt_2(i,j).real()));
+            denominator.push_back(std::abs(num_dt_2(i,j).real() - num_dt_4(i, j).real()));
+        }
+    }
+
+    double num = *std::max_element(numerator.begin(), numerator.end());
+    double denom = *std::max_element(denominator.begin(), denominator.end());
+
+    return std::log2(num / denom);
 }
 
 // timestep from Ketcherson (Algorithm 3: 2S)

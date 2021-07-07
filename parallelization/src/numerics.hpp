@@ -11,9 +11,17 @@ enum DIV_AX {
     Y
 };
 
+matrix_t add_ghost(const matrix_t &m, ind_t num_ghost);
+
 void second_deriv_4th_order(matrix_t &deriv, const matrix_t &orig, double step, DIV_AX ax, ind_t num_ghost=2);
 void second_deriv_2nd_order(matrix_t &deriv, const matrix_t &orig, double step, DIV_AX ax, ind_t num_ghost=1);
 void bc_periodic(matrix_t &m, ind_t num_ghost=2);
+
+double anal_conv_oder_space(const matrix_t &ana, const matrix_t &num_h, const matrix_t &num_h_half, ind_t num_ghost);
+double anal_conv_oder_time(const matrix_t &ana, const matrix_t &num_dt, const matrix_t &num_dt_half, ind_t num_ghost);
+
+double self_conv_order_space(const matrix_t &num_h, const matrix_t &num_h_2, const matrix_t &num_h_4, ind_t num_ghost);
+double self_conv_order_time(const matrix_t &num_dt, const matrix_t &num_dt_2, const matrix_t &num_dt_4, ind_t num_ghost);
 
 // Runge Kutta 4 class
 // low storage method

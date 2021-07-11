@@ -389,6 +389,84 @@ void wave_eq_1D_periodic_bc_basic_sconvergence_space()
     std::cerr << "self convergence space: " << self_conv_order_space(field_matrix, field_matrix_half, field_matrix_quart, 2) << endl;
 }
 
+void wave_eq_1D_periodic_bc_basic_sconvergence_time()
+{
+    // complex numbers, where
+    // real == phi
+    // imag == Pi
+
+    const ind_t rows = 1;
+    const ind_t cols = 500;
+    const ind_t num_ghost = 2;
+    matrix_t field_matrix = matrix_t::Zero(rows, cols);
+    matrix_t field_matrix_half = matrix_t::Zero(rows, cols);
+    matrix_t field_matrix_quart = matrix_t::Zero(rows, cols);
+
+    const double x_min = -5;
+    const double x_max = 5;
+    const double dx = (x_max - x_min) / (cols - 1.); // behaviour as in np.linspace
+
+    RK4::func_t we_func = std::bind(we_func_full, std::placeholders::_1, dx);
+
+    // init field_matrix with function
+    // first fill x_grid
+    double temp_x = x_min;
+    for (ind_t i = 0; i < field_matrix.cols(); ++i) {
+        field_matrix(0, i) = temp_x;
+        field_matrix_quart(0, i) = temp_x;
+        field_matrix_half(0, i) = temp_x;
+        temp_x += dx;
+    }
+
+    field_matrix = add_ghost(field_matrix, num_ghost);
+    field_matrix_half = add_ghost(field_matrix_half, num_ghost);
+    field_matrix_quart = add_ghost(field_matrix_quart, num_ghost);
+
+    // fill with function
+    auto init_func = [](element_t x) {
+        return std::exp(-x.real()*x.real());
+    };
+
+    field_matrix = field_matrix.unaryExpr(init_func);
+    field_matrix_half = field_matrix_half.unaryExpr(init_func);
+    field_matrix_quart = field_matrix_quart.unaryExpr(init_func);
+
+    RK4 solver;
+    const double start_time = 0.0;
+    const double stop_time = 3;
+    const double dt = 0.01;
+
+    std::cerr << "CFL=" << dt / dx << endl;
+    if (dt / dx >= 1.) {
+        return;
+    }
+
+    // NOTE: currently doing twice as many operations in second derivative,
+    // since it's also calculating for Pi, not only phi. This is uneccessary.. hmm...
+    double t = start_time;
+    for (; t < stop_time; t += dt) {
+        // do timestep
+        solver.time_step(field_matrix, we_func, dt);
+
+        solver.time_step(field_matrix_half, we_func, dt / 2.);
+        solver.time_step(field_matrix_half, we_func, dt / 2.);
+
+        solver.time_step(field_matrix_quart, we_func, dt / 4.);
+        solver.time_step(field_matrix_quart, we_func, dt / 4.);
+        solver.time_step(field_matrix_quart, we_func, dt / 4.);
+        solver.time_step(field_matrix_quart, we_func, dt / 4.);
+    }
+
+    // cout << field_matrix << endl;
+    // cout << endl;
+    // cout << field_matrix_ana << endl;
+    // cout << endl;
+    // cout << field_matrix_half << endl;
+    // cout << endl;
+    
+    std::cerr << "self convergence time: " << self_conv_order_time(field_matrix, field_matrix_half, field_matrix_quart, 2) << endl;
+}
+
 matrix_t we_2D_func_full(matrix_t& m, const double dx, const double dy)
 {
     matrix_t deriv_x = matrix_t(m.rows(), m.cols());
@@ -399,6 +477,9 @@ matrix_t we_2D_func_full(matrix_t& m, const double dx, const double dy)
 
     deriv_x += deriv_y;
 
+#ifdef IS_PARALLEL
+    #pragma omp for
+#endif
     for (ind_t i = 0; i < m.size(); ++i) {
         *mp_at(deriv_x, i) = element_t(mp_at(m, i)->imag(), 1*mp_at(deriv_x, i)->real());
     }
@@ -446,7 +527,7 @@ void wave_eq_2D_periodic_bc_basic()
     const double stop_time = 10;
     const double dt = 0.005;
 
-    const double print_every_t = 0.5;
+    const double print_every_t = 10000;
 
     std::cerr << "CFL=" << dt / dx << endl;
     if (dt / dx >= 1.) {
@@ -510,6 +591,9 @@ void test_second_deriv()
     }
 }
 
+#include <chrono>
+#include <omp.h>
+
 int main()
 {
     // matrix_t m(7, 7);
@@ -542,12 +626,20 @@ int main()
     // TODO: WRITE TEST FUNCTIONS!!
 
     // wave_eq_1D_periodic_bc_basic();
-    wave_eq_1D_periodic_bc_basic_convergence_space();
-    wave_eq_1D_periodic_bc_basic_convergence_time();
-    wave_eq_1D_periodic_bc_basic_sconvergence_space();
+    // wave_eq_1D_periodic_bc_basic_convergence_space();
+    // wave_eq_1D_periodic_bc_basic_convergence_time();
+    // wave_eq_1D_periodic_bc_basic_sconvergence_space();
+    // wave_eq_1D_periodic_bc_basic_sconvergence_time();
     // HO_test();
     // test_second_deriv();
 
+#define IS_PARALLEL
+#ifdef IS_PARALLEL
+    omp_set_num_threads(4);
+    cout << omp_get_num_threads() << endl;
+#endif
+
+    wave_eq_2D_periodic_bc_basic();
 
     // idea for visualizing 1D wave:
     // print multiple timesteps in 1 picture, but fade out later timesteps

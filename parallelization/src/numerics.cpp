@@ -52,6 +52,9 @@ void second_deriv_4th_order(matrix_t &deriv, const matrix_t &orig, double step, 
 
     // not pretty, but probably the fastest way to do this
     if (ax == DIV_AX::X) {
+#ifdef IS_PARALLEL
+        #pragma for collapse(2)
+#endif
         for (ind_t j = num_ghost; j < orig.cols() - num_ghost; ++j) {
             for (ind_t i = num_ghost; i < orig.rows() - num_ghost; ++i) {
                 deriv(i, j) = ( 
@@ -63,6 +66,9 @@ void second_deriv_4th_order(matrix_t &deriv, const matrix_t &orig, double step, 
         }
     } 
     else if (ax == DIV_AX::Y) {
+#ifdef IS_PARALLEL
+        #pragma for collapse(2)
+#endif
         for (ind_t j = num_ghost; j < orig.cols() - num_ghost; ++j) {
             for (ind_t i = num_ghost; i < orig.rows() - num_ghost; ++i) {
                 deriv(i, j) = ( 
@@ -267,10 +273,31 @@ void RK4::quadrature(matrix_t &mat, func_t foo, const low_sto_coeff& coeff)
     // S2.zero_self();
 
     for (unsigned i = 0; i < 4; ++i) {
+#ifndef IS_PARALLEL
         S2 += coeff.delta[i] * S1;
 
-        auto temp = foo(S1);
+        S1 = coeff.gamma_1[i] * S1 + coeff.gamma_2[i] * S2 + coeff.beta[i]*foo(S1);
+#else
+        matrix_t temp;
+        #pragma omp parallel shared(temp)
+        {
+            #pragma omp for
+            for (ind_t i = 0; i < S1.size(); ++i) {
+                *mp_at(S2, i) += coeff.delta[i] * *mp_at(S1, i);
+            }
 
-        S1 = coeff.gamma_1[i] * S1 + coeff.gamma_2[i] * S2 + coeff.beta[i]*temp;
+            #pragma omp barrier
+            temp = foo(S1);
+
+            #pragma omp barrier
+
+            #pragma omp for
+            for (ind_t i = 0; i < S1.size(); ++i) {
+                *mp_at(S1, i) = coeff.gamma_1[i] * *mp_at(S1, i) + coeff.gamma_2[i] * *mp_at(S2, i)
+                    + coeff.beta[i] * *mp_at(temp, i);
+            }
+        }
+#endif
+
     }
 }

@@ -49,9 +49,9 @@ def plot_3d(file):
     Z = np.genfromtxt(file, delimiter=",")
 
     # Plot the surface.
-    # surf = ax.plot_surface(X, Y, Z, cmap=cm.coolwarm,
-    #                     linewidth=0, antialiased=False)
-    ax.plot_wireframe(X, Y, Z, rstride=30, cstride=30)
+    surf = ax.plot_surface(X, Y, Z, cmap=cm.coolwarm,
+                        linewidth=0, antialiased=False)
+    # ax.plot_wireframe(X, Y, Z, rstride=30, cstride=30)
 
     # # Customize the z axis.
     # ax.set_zlim(-1.01, 1.01)
@@ -65,7 +65,9 @@ def plot_3d(file):
     plt.show()
 
 if __name__ == "__main__": 
-    # plot_3d("out/3D_t=6.0.dat")
+    plot_3d("out/3D_t=5.0.dat")
+    # plot_1d_wave()
+    exit()
 
     x = np.linspace(-5, 5, 100)
     y = np.genfromtxt("out/nsg_conv_h.dat", delimiter=",")

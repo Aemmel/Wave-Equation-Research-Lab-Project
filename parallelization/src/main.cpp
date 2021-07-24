@@ -4,8 +4,10 @@
 #include <vector>
 #include <sstream>
 #include <string>
+#include <stdlib.h>
 
 // #include "Eigen/Dense"
+#define IS_PARALLEL 0
 
 #include "commons.hpp"
 #include "numerics.hpp"
@@ -474,27 +476,31 @@ matrix_t we_2D_func_full(matrix_t& m, const double dx, const double dy)
     bc_periodic(m);
     second_deriv_4th_order(deriv_x, m, dx, DIV_AX::X, 2);
     second_deriv_4th_order(deriv_y, m, dy, DIV_AX::Y, 2);
+    // if (omp_get_thread_num() == 0)
+    //     cout << "FOO: A" << endl;
 
-    deriv_x += deriv_y;
+    // deriv_x += deriv_y;
 
-#ifdef IS_PARALLEL
-    #pragma omp for
-#endif
+// #ifdef IS_PARALLEL
+// #endif
+    // #pragma omp for
     for (ind_t i = 0; i < m.size(); ++i) {
-        *mp_at(deriv_x, i) = element_t(mp_at(m, i)->imag(), 1*mp_at(deriv_x, i)->real());
+        *mp_at(deriv_x, i) = element_t(mp_at(m, i)->imag(), mp_at(deriv_x, i)->real() + mp_at(deriv_y, i)->real());
     }
+    // if (omp_get_thread_num() == 0)
+    //     cout << "FOO: B" << endl;
 
     return deriv_x;
 }
 
-void wave_eq_2D_periodic_bc_basic()
+void wave_eq_2D_periodic_bc_basic(const ind_t rows, const ind_t cols)
 {
     // complex numbers, where
     // real == phi
     // imag == Pi
 
-    const ind_t rows = 500;
-    const ind_t cols = 500;
+    // const ind_t rows = 500;
+    // const ind_t cols = 500;
     const ind_t num_ghost = 2;
     matrix_t field_matrix = matrix_t::Zero(rows + 2*num_ghost, cols + 2*num_ghost);
 
@@ -527,7 +533,7 @@ void wave_eq_2D_periodic_bc_basic()
     const double stop_time = 10;
     const double dt = 0.005;
 
-    const double print_every_t = 10000;
+    const double print_every_t = 0.5;
 
     std::cerr << "CFL=" << dt / dx << endl;
     if (dt / dx >= 1.) {
@@ -549,8 +555,9 @@ void wave_eq_2D_periodic_bc_basic()
 
         if (print_timer > print_every_t) {
             print_timer = 0.;
-
+            
             printer.print_mat(field_matrix, "3D_t=" + format(t+dt, 1), 2);
+            cout << "done with " << format(t+dt,1) << std::endl;
         }
     }
 }
@@ -594,55 +601,25 @@ void test_second_deriv()
 #include <chrono>
 #include <omp.h>
 
-int main()
+int main(int argc, char *argv[])
 {
-    // matrix_t m(7, 7);
-    // m << 0, 0, 0, 0, 0, 0, 0,
-    //      0, 0, 0, 0, 0, 0, 0,
-    //      0, 0, 1, 2, 3, 0, 0,
-    //      0, 0, 4, 5, 6, 0, 0,
-    //      0, 0, 7, 8, 9, 0, 0,
-    //      0, 0, 0, 0, 0, 0, 0,
-    //      0, 0, 0, 0, 0, 0, 0;
+    if (argc < 3) {
+        std::cerr << "need rows and cols as arguments" << std::endl;
+        return -1;
+    }
 
-    // cout << m << endl;
-    // cout << endl;
+    ind_t rows = std::strtol(argv[1], NULL, 10);
+    ind_t cols = std::strtol(argv[2], NULL, 10);
 
-    // bc_periodic(m);
-
-    // cout << m << endl;
-
-
-    // matrix_t m = matrix_t::Constant(2, 3, 1);
-
-    // cout << m << endl;
-
-    // m = add_ghost(m, 2); 
-
-    // cout << "After filling: " << endl;
-    // cout << m << endl;
-
-
-    // TODO: WRITE TEST FUNCTIONS!!
-
-    // wave_eq_1D_periodic_bc_basic();
-    // wave_eq_1D_periodic_bc_basic_convergence_space();
-    // wave_eq_1D_periodic_bc_basic_convergence_time();
-    // wave_eq_1D_periodic_bc_basic_sconvergence_space();
-    // wave_eq_1D_periodic_bc_basic_sconvergence_time();
-    // HO_test();
-    // test_second_deriv();
-
-#define IS_PARALLEL
 #ifdef IS_PARALLEL
-    omp_set_num_threads(4);
-    cout << omp_get_num_threads() << endl;
+    #pragma omp parallel
+    {
+        #pragma omp single
+        cout << omp_get_num_threads() << endl;
+    }
 #endif
 
-    wave_eq_2D_periodic_bc_basic();
-
-    // idea for visualizing 1D wave:
-    // print multiple timesteps in 1 picture, but fade out later timesteps
+    wave_eq_2D_periodic_bc_basic(rows, cols);
 
     return 0;
 }

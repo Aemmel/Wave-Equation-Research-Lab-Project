@@ -1,10 +1,9 @@
-cmake_minimum_required(VERSION 3.16)
+cmake_minimum_required(VERSION 3.9)
 
 set(CMAKE_C_COMPILER gcc)
 set(CMAKE_CXX_COMPILER g++)
 
-project(wave
-    LANGUAGES CXX)
+project(wave LANGUAGES CXX)
 
 find_package(OpenMP REQUIRED)
 

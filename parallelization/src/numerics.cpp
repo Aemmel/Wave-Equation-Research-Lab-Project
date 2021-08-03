@@ -54,9 +54,8 @@ void second_deriv_4th_order(matrix_t &deriv, const matrix_t &orig, double step, 
 
     // not pretty, but probably the fastest way to do this
     if (ax == DIV_AX::X) {
-// #ifdef IS_PARALLEL
-// #endif
-        #pragma omp for collapse(2)
+        // #pragma omp for collapse(2)
+        #pragma omp parallel for collapse(2)
         for (ind_t j = num_ghost; j < orig.cols() - num_ghost; ++j) {
             for (ind_t i = num_ghost; i < orig.rows() - num_ghost; ++i) {
                 deriv(i, j) = ( 
@@ -68,9 +67,8 @@ void second_deriv_4th_order(matrix_t &deriv, const matrix_t &orig, double step, 
         }
     } 
     else if (ax == DIV_AX::Y) {
-// #ifdef IS_PARALLEL
-// #endif
-        #pragma omp for collapse(2)
+    // #pragma omp for collapse(2)
+        #pragma omp parallel for collapse(2)
         for (ind_t j = num_ghost; j < orig.cols() - num_ghost; ++j) {
             for (ind_t i = num_ghost; i < orig.rows() - num_ghost; ++i) {
                 deriv(i, j) = ( 
@@ -267,59 +265,92 @@ void RK4::time_step(matrix_t &mat, func_t foo, const double dt)
     quadrature(mat, foo, coeff_dt);
 }
 
+void RK4::time_step_par(matrix_t &mat, const double dx, const double dy, const double dt)
+{
+    low_sto_coeff coeff_dt = m_low_sto_coeff;
+    // dt*beta
+    std::transform(coeff_dt.beta.begin(), coeff_dt.beta.end(), coeff_dt.beta.begin(),
+        std::bind(std::multiplies<double>(), std::placeholders::_1, dt));
+
+    quadrature_par(mat, dx, dy, coeff_dt);
+}
+
 void RK4::quadrature(matrix_t &mat, func_t foo, const low_sto_coeff& coeff)
 {
     matrix_t &S1 = mat;
-    // matrix_t S2(mat.rows(), mat.cols()); // init to "zero"?
     matrix_t S2 = matrix_t::Zero(mat.rows(), mat.cols());
-    // S2.zero_self();
+
+    for (unsigned i = 0; i < 4; ++i) {
+        S2 += coeff.delta[i] * S1;
+
+        S1 = coeff.gamma_1[i] * S1 + coeff.gamma_2[i] * S2 + coeff.beta[i]*foo(S1);
+    }
+}
+
+void RK4::quadrature_par(matrix_t &mat, const double dx, const double dy, const low_sto_coeff& coeff)
+{
+    matrix_t &S1 = mat;
+    matrix_t S2 = matrix_t::Zero(mat.rows(), mat.cols());
 
     matrix_t deriv_x = matrix_t(mat.rows(), mat.cols());
     matrix_t deriv_y = matrix_t(mat.rows(), mat.cols());
-    // matrix_t temp = matrix_t(mat.rows(), mat.real());
 
     for (unsigned i = 0; i < 4; ++i) {
-// #ifndef IS_PARALLEL
-        // S2 += coeff.delta[i] * S1;
+        ///////////
+        // one fork
+        // #pragma omp parallel //default(none) shared(S1, S2, deriv_x, deriv_y, coeff, i)
+        // {
+        //     #pragma omp for
+        //     for (ind_t j = 0; j < S1.size(); ++j) {
+        //         *mp_at(S2, j) += coeff.delta[i] * *mp_at(S1, j);
+        //     }
 
-        // S1 = coeff.gamma_1[i] * S1 + coeff.gamma_2[i] * S2 + coeff.beta[i]*foo(S1);
-// #else
-        #pragma omp parallel //default(none) shared(S1, S2, deriv_x, deriv_y, coeff, i)
-        {
-            #pragma omp for
-            for (ind_t j = 0; j < S1.size(); ++j) {
-                *mp_at(S2, j) += coeff.delta[i] * *mp_at(S1, j);
-            }
+        //     #pragma omp single
+        //     bc_periodic(S1);
 
-            // #pragma omp master
-            // {
-            //     temp = foo(S1);
-            // }
+        //     second_deriv_4th_order(deriv_x, S1, dx, DIV_AX::X, 2);
+        //     second_deriv_4th_order(deriv_y, S1, dy, DIV_AX::Y, 2);
 
-            #pragma omp single
-            bc_periodic(S1);
+        //     #pragma omp barrier
 
-            second_deriv_4th_order(deriv_x, S1, 0.04008016, DIV_AX::X, 2);
-            second_deriv_4th_order(deriv_y, S1, 0.04008016, DIV_AX::Y, 2);
+        //     // reuse deriv_x as a temporary variable to store the result
+        //     #pragma omp for
+        //     for (ind_t j = 0; j < S1.size(); ++j) {
+        //         *mp_at(deriv_x, j) = element_t(mp_at(S1, j)->imag(), mp_at(deriv_x, j)->real() + mp_at(deriv_y, j)->real());
+        //     }
 
-            #pragma omp barrier
-
-            // reuse deriv_x as a temporary variable to store the result
-            #pragma omp for
-            for (ind_t j = 0; j < S1.size(); ++j) {
-                *mp_at(deriv_x, j) = element_t(mp_at(S1, j)->imag(), mp_at(deriv_x, j)->real() + mp_at(deriv_y, j)->real());
-            }
-
-            #pragma omp barrier
+        //     #pragma omp barrier
 
 
-            #pragma omp for
-            for (ind_t j = 0; j < S1.size(); ++j) {
-                *mp_at(S1, j) = coeff.gamma_1[i] * *mp_at(S1, j) + coeff.gamma_2[i] * *mp_at(S2, j)
-                    + coeff.beta[i] * *mp_at(deriv_x, j);
-            }
+        //     #pragma omp for
+        //     for (ind_t j = 0; j < S1.size(); ++j) {
+        //         *mp_at(S1, j) = coeff.gamma_1[i] * *mp_at(S1, j) + coeff.gamma_2[i] * *mp_at(S2, j)
+        //             + coeff.beta[i] * *mp_at(deriv_x, j);
+        //     }
+        // }
+
+        ///////////
+        // multiple forks
+        #pragma omp parallel for
+        for (ind_t j = 0; j < S1.size(); ++j) {
+            *mp_at(S2, j) += coeff.delta[i] * *mp_at(S1, j);
         }
-// #endif
 
+        bc_periodic(S1);
+
+        second_deriv_4th_order(deriv_x, S1, dx, DIV_AX::X, 2);
+        second_deriv_4th_order(deriv_y, S1, dy, DIV_AX::Y, 2);
+
+        // reuse deriv_x as a temporary variable to store the result
+        #pragma omp parallel for
+        for (ind_t j = 0; j < S1.size(); ++j) {
+            *mp_at(deriv_x, j) = element_t(mp_at(S1, j)->imag(), mp_at(deriv_x, j)->real() + mp_at(deriv_y, j)->real());
+        }
+
+        #pragma omp parallel for
+        for (ind_t j = 0; j < S1.size(); ++j) {
+            *mp_at(S1, j) = coeff.gamma_1[i] * *mp_at(S1, j) + coeff.gamma_2[i] * *mp_at(S2, j)
+                + coeff.beta[i] * *mp_at(deriv_x, j);
+        }
     }
 }

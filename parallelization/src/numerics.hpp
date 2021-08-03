@@ -45,8 +45,10 @@ private:
 // pub functions
 public:
     void time_step(matrix_t &mat, func_t foo, const double dt);
+    void time_step_par(matrix_t &mat, const double dx, const double dy, const double dt);
 
 // private functions
 private:
     void quadrature(matrix_t &mat, func_t foo, const low_sto_coeff& coeff);
+    void quadrature_par(matrix_t &mat, const double dx, const double dy, const low_sto_coeff& coeff);
 };
